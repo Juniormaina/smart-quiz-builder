@@ -1,0 +1,108 @@
+import { ConfusionPair } from '@/lib/types';
+
+export const confusionPairs: ConfusionPair[] = [
+  {
+    id: 'policy-vs-rbac',
+    a: { name: 'Azure Policy', oneLiner: 'Controls which resource configurations are allowed or audited.' },
+    b: { name: 'Azure RBAC', oneLiner: 'Controls which users can perform actions on resources.' },
+    comparison: [
+      { dimension: 'Question answered', a: 'What configuration is allowed?', b: 'Who can do what?' },
+      { dimension: 'Evaluates', a: 'Resource properties and compliance', b: 'Identity, role, action, and scope' },
+      { dimension: 'Typical outcome', a: 'Audit or deny a noncompliant resource', b: 'Grant or deny an operation' },
+      { dimension: 'Example', a: 'Require storage accounts to use secure transport', b: 'Allow a user to view a storage account' },
+    ],
+    ruleOfThumb: 'Policy governs resource state; RBAC governs user actions.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-policy-vs-rbac-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'region-vs-zone',
+    a: { name: 'Azure region', oneLiner: 'A geographic area containing one or more datacenters.' },
+    b: { name: 'Availability zone', oneLiner: 'A physically separate location within a supported region.' },
+    comparison: [
+      { dimension: 'Scope', a: 'Geographic area', b: 'Isolated location within a region' },
+      { dimension: 'Purpose', a: 'Choose where a workload is deployed', b: 'Improve resilience within a region' },
+      { dimension: 'Relationship', a: 'May contain availability zones', b: 'Belongs to a region' },
+      { dimension: 'Failure protection', a: 'Regional placement', b: 'Helps protect against a datacenter-level outage' },
+    ],
+    ruleOfThumb: 'A region is the area; a zone is a separate location inside it.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-region-vs-zone-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'arm-vs-bicep',
+    a: { name: 'ARM templates', oneLiner: 'JSON-based declarative templates for Azure deployments.' },
+    b: { name: 'Bicep', oneLiner: 'A concise language that compiles to ARM templates.' },
+    comparison: [
+      { dimension: 'Authoring format', a: 'JSON', b: 'Purpose-built declarative syntax' },
+      { dimension: 'Deployment engine', a: 'Azure Resource Manager', b: 'Azure Resource Manager' },
+      { dimension: 'Relationship', a: 'Native deployment template format', b: 'Compiles to ARM JSON' },
+      { dimension: 'Use', a: 'Deploy repeatable infrastructure', b: 'Author repeatable infrastructure more readably' },
+    ],
+    ruleOfThumb: 'Bicep is an easier authoring language; ARM remains the deployment engine.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-arm-vs-bicep-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'iaas-paas-saas',
+    a: { name: 'IaaS', oneLiner: 'Rent infrastructure and manage the operating system and applications.' },
+    b: { name: 'PaaS / SaaS', oneLiner: 'PaaS manages the platform; SaaS delivers a ready-to-use application.' },
+    comparison: [
+      { dimension: 'Customer control', a: 'Highest over OS and software', b: 'PaaS: app-focused; SaaS: application use/configuration' },
+      { dimension: 'Provider manages', a: 'Physical infrastructure and virtualization', b: 'PaaS: runtime/platform; SaaS: application stack' },
+      { dimension: 'Typical use', a: 'Custom OS or legacy workload', b: 'Build/deploy app (PaaS) or consume app (SaaS)' },
+      { dimension: 'Examples', a: 'Azure Virtual Machines', b: 'Azure App Service / Microsoft 365' },
+    ],
+    ruleOfThumb: 'More provider management means less infrastructure you maintain: IaaS → PaaS → SaaS.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-iaas-paas-saas-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'capex-vs-opex',
+    a: { name: 'CapEx', oneLiner: 'Upfront capital investment in assets such as owned hardware.' },
+    b: { name: 'OpEx', oneLiner: 'Ongoing operational spending, often aligned to consumption.' },
+    comparison: [
+      { dimension: 'Timing', a: 'Usually upfront', b: 'Ongoing as services are consumed' },
+      { dimension: 'Cloud relationship', a: 'Reduced need to buy datacenter hardware', b: 'Common consumption-based cloud cost model' },
+      { dimension: 'Risk', a: 'Capacity may be purchased before it is needed', b: 'Spend can vary with usage' },
+      { dimension: 'Example', a: 'Buying servers for a datacenter', b: 'Paying a monthly service bill' },
+    ],
+    ruleOfThumb: 'Buying assets upfront is CapEx; paying to operate or consume services is OpEx.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-capex-vs-opex-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'pricing-vs-tco',
+    a: { name: 'Pricing Calculator', oneLiner: 'Estimates Azure service costs for a planned solution.' },
+    b: { name: 'TCO Calculator', oneLiner: 'Compares the cost of running workloads on-premises with Azure.' },
+    comparison: [
+      { dimension: 'Primary question', a: 'What might Azure services cost?', b: 'How might Azure compare with on-premises costs?' },
+      { dimension: 'Starting point', a: 'Azure services and configuration assumptions', b: 'Existing infrastructure and operating costs' },
+      { dimension: 'Use', a: 'Plan a new Azure deployment', b: 'Estimate potential savings from migration' },
+      { dimension: 'Output', a: 'Azure cost estimate', b: 'Comparative total-cost estimate' },
+    ],
+    ruleOfThumb: 'Estimate Azure spend with Pricing; compare migration economics with TCO.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-pricing-vs-tco-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'advisor-monitor-health',
+    a: { name: 'Azure Advisor', oneLiner: 'Personalized recommendations for Azure resource optimization.' },
+    b: { name: 'Azure Monitor / Service Health', oneLiner: 'Monitor tracks workload telemetry; Service Health reports Azure platform events.' },
+    comparison: [
+      { dimension: 'Purpose', a: 'Recommend improvements', b: 'Observe workloads or Azure service status' },
+      { dimension: 'Data', a: 'Resource configuration and usage signals', b: 'Monitor: metrics/logs; Health: incidents/maintenance' },
+      { dimension: 'Question answered', a: 'How can I improve this resource?', b: 'What is happening with my workload or Azure service?' },
+      { dimension: 'Common action', a: 'Review a reliability or cost recommendation', b: 'Investigate an alert or regional incident' },
+    ],
+    ruleOfThumb: 'Advisor recommends; Monitor observes your workloads; Service Health reports Azure platform events.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-advisor-monitor-health-${String(index + 1).padStart(2, '0')}`),
+  },
+  {
+    id: 'locks-vs-policy',
+    a: { name: 'Resource locks', oneLiner: 'Protect resources from accidental deletion or modification.' },
+    b: { name: 'Azure Policy', oneLiner: 'Audit or enforce resource configuration requirements.' },
+    comparison: [
+      { dimension: 'Primary purpose', a: 'Prevent accidental management operations', b: 'Enforce or audit configuration rules' },
+      { dimension: 'Example', a: 'Protect a production resource group from deletion', b: 'Require a specific configuration on resources' },
+      { dimension: 'Scope', a: 'Applied to supported resource scopes', b: 'Assigned to scopes and evaluates resource properties' },
+      { dimension: 'Question answered', a: 'Can this resource be deleted or changed?', b: 'Does this resource meet the required configuration?' },
+    ],
+    ruleOfThumb: 'Locks protect from accidental operations; Policy governs compliant configuration.',
+    drillQuestionIds: Array.from({ length: 5 }, (_, index) => `pair-locks-vs-policy-${String(index + 1).padStart(2, '0')}`),
+  },
+];
