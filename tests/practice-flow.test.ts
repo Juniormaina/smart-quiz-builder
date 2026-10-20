@@ -3,6 +3,7 @@ import {
   buildAttempt,
   canChangeSelection,
   captureSubmittedAnswer,
+  getCorrectAnswerDisplay,
   isSelectionCorrect,
   resolvePendingAnswer,
   shouldRecordBeforeAdvance,
@@ -10,6 +11,7 @@ import {
   withTeachBack,
 } from '@/lib/practice-flow';
 import { questionBank } from '@/data/index';
+import { shuffleOptions } from '@/lib/selection';
 import { TeachBackResult } from '@/lib/types';
 
 const question = questionBank.find((item) => item.type === 'single')!;
@@ -50,6 +52,15 @@ describe('practice answer lifecycle', () => {
     expect(attempt.qid).toBe(question.id);
     expect(attempt.chosen).toEqual([question.correct[0]]);
     expect(attempt.correct).toBe(true);
+  });
+
+  it('reports correct answer positions from the displayed shuffled options', () => {
+    const shuffled = shuffleOptions(question, 4);
+    const correctOption = shuffled.options.find((option) => shuffled.correct.includes(option.id));
+    const correctPosition = shuffled.options.findIndex((option) => shuffled.correct.includes(option.id)) + 1;
+
+    expect(correctOption).toBeDefined();
+    expect(getCorrectAnswerDisplay(shuffled)).toBe(`${correctPosition}. ${correctOption?.text}`);
   });
 
   it('keeps the graded teach-back when a confidence value is chosen', () => {

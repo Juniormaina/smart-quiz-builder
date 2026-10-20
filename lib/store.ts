@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { PendingAnswer, ProgressState } from '@/lib/types';
+import { PendingAnswer, PracticeSessionState, ProgressState } from '@/lib/types';
 
 const initialState: ProgressState = {
   attempts: [],
@@ -16,6 +16,19 @@ function isValidPendingAnswer(value: unknown): value is PendingAnswer {
   if (!Array.isArray(candidate.chosen)) return false;
   if (typeof candidate.correct !== 'boolean') return false;
   if (candidate.phase !== 'awaiting-teach-back' && candidate.phase !== 'awaiting-confidence') return false;
+  return true;
+}
+
+export function isValidPracticeSession(value: unknown): value is PracticeSessionState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  if (!['practice', 'remediation', 'pair-drill'].includes(candidate.mode as string)) return false;
+  if (!Array.isArray(candidate.questions) || candidate.questions.length === 0) return false;
+  if (!Array.isArray(candidate.adaptivePool) || !Array.isArray(candidate.selectedAnswer)) return false;
+  if (!Number.isInteger(candidate.currentIndex) || (candidate.currentIndex as number) < 0 || (candidate.currentIndex as number) >= candidate.questions.length) return false;
+  if (!Number.isInteger(candidate.sessionTarget) || (candidate.sessionTarget as number) < candidate.questions.length) return false;
+  if (!Array.isArray(candidate.selectedDomains) || typeof candidate.adaptiveEnabled !== 'boolean') return false;
+  if (typeof candidate.submitted !== 'boolean' || typeof candidate.feedbackOpen !== 'boolean') return false;
   return true;
 }
 

@@ -6,9 +6,24 @@ A demo-ready Azure Fundamentals study app designed around the loop: Answer → U
 This app gives learners a calm quiz flow, explanatory feedback, weak-subtopic tracking, and a local-only progress store. It is intentionally built without any API key requirement.
 
 ## Local setup
-1. npm install
-2. npm run dev
-3. Visit http://localhost:3000
+1. Clone the repo 
+  ```bash
+      git clone https://github.com/okellojun/smart-quiz-builder.git
+
+      cd smart-quiz-builder
+  ```
+2. Install dependencies
+``` bash
+      npm install
+```
+3. Start the dev server
+```bash
+    npm run dev
+```
+4. Open In your Browser
+```text
+Visit http://localhost:3000
+```
 
 ## Environment variables
 - ANTHROPIC_API_KEY (optional): enables the AI explanation drawer. If it is missing, the app falls back to the built-in explanation content.
@@ -115,7 +130,7 @@ Every question gets an item rating derived from its authored difficulty: easy = 
 
 `E = 1 / (1 + 10^((itemRating - userRating) / 400))`
 
-Practice selection favors questions near a predicted 0.70 success probability. This aims for a useful challenge while leaving room for mistakes and learning. Candidate ranking also boosts weak subtopics and penalizes recently seen items; a weighted random choice from the top five avoids a rigid sequence. A session never repeats a question. Exam simulation uses its fixed question set and does not adapt.
+Practice defaults to 30 questions and favors questions near a predicted 0.70 success probability. Adaptive practice selects the next question after each answer and does not repeat questions within a session. Candidate ranking boosts weak subtopics and penalizes recently seen items; a weighted random choice from the top five avoids a rigid sequence. Exam simulation uses a fixed 50-question set and does not adapt.
 
 After answering, the rating update is `newRating = rating + K * (score - E)`, clamped to 600–1800. `K` is 48 during the first ten attempts in a domain, then 32. Single-choice correctness scores 1 or 0; a correct single-choice response with a zero teach-back score earns 0.6. Multi-select and yes/no-statement questions use partial credit for correct selections. The question header shows the current level and difficulty, and the feedback trace can reveal the exact update.
 

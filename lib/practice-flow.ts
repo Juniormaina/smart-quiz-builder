@@ -6,6 +6,12 @@ export function isSelectionCorrect(question: Question, selection: string[]): boo
   return orderedSelected.length === orderedCorrect.length && orderedSelected.every((value, index) => value === orderedCorrect[index]);
 }
 
+export function getCorrectAnswerDisplay(question: Question): string {
+  return question.options
+    .flatMap((option, index) => question.correct.includes(option.id) ? [`${index + 1}. ${option.text}`] : [])
+    .join(', ');
+}
+
 /**
  * Snapshot a submitted answer. Correctness is decided here, once, so that the
  * recorded attempt always matches what the learner actually submitted.

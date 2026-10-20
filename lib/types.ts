@@ -33,6 +33,39 @@ export interface PairDrillResult {
   afterAccuracy: number;
 }
 
+export type PracticeSessionMode = 'practice' | 'remediation' | 'pair-drill';
+
+export interface PracticeSessionState {
+  mode: PracticeSessionMode;
+  questions: Question[];
+  adaptivePool: Question[];
+  currentIndex: number;
+  selectedAnswer: string[];
+  sessionTarget: number;
+  adaptiveEnabled: boolean;
+  selectedDomains: Domain[];
+  difficulty: number | null;
+  count: number;
+  submitted: boolean;
+  feedbackOpen: boolean;
+  teachBackText: string;
+  teachBackResult: TeachBackResult | null;
+  learningSignal: LearningSignal | 'unknown' | null;
+  activePairId: string | null;
+  pairDrillStartedAt: number | null;
+  pairBaselineAccuracy: number;
+  ratingDelta: {
+    before: number;
+    after: number;
+    delta: number;
+    reason: string;
+    score: number;
+    expected: number;
+    kFactor: number;
+  } | null;
+  subtopicChange: { before: number; after: number } | null;
+}
+
 export interface QuestionOption {
   id: string;
   text: string;
@@ -114,6 +147,7 @@ export interface ProgressState {
   sessions: Record<string, unknown> & {
     pairDrills?: Record<string, PairDrillResult>;
     demo?: { enabled: boolean; startingRating: number };
+    practice?: PracticeSessionState | null;
   };
 }
 

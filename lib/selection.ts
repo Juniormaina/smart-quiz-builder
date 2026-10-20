@@ -169,7 +169,7 @@ export function buildRemediationSet(questions: Question[], attempts: Attempt[], 
   return shuffleSeeded(finalSelection.slice(0, count), seed + 99);
 }
 
-export function buildExamSet(questions: Question[], seed: number, count = 40): Question[] {
+export function buildExamSet(questions: Question[], seed: number, count = 50): Question[] {
   const domainWeights: Record<Domain, number> = {
     'cloud-concepts': 0.28,
     'architecture-services': 0.38,

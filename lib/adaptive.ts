@@ -13,6 +13,10 @@ export function ratingLevel(rating: number) {
   return 'Advanced';
 }
 
+export function formatRating(rating: number) {
+  return Math.round(rating).toString();
+}
+
 export function expectedCorrectness(itemElo: number, userRating: number) {
   return 1 / (1 + 10 ** ((itemElo - userRating) / 400));
 }

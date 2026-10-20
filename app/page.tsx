@@ -8,14 +8,14 @@ import { Bar, BarChart, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusA
 import { questionBank } from '@/data/index';
 import { buildExamSet, buildPracticeSet, buildRemediationSet, shuffleOptions } from '@/lib/selection';
 import { calculateAccuracy, calculateStreak, countAnsweredQuestions, getAccuracyTrend, getDomainBreakdown, getExamResults, getWeakSubtopics } from '@/lib/scoring';
-import { addAttempt, setPendingAnswer, toggleBookmark, useProgressStore } from '@/lib/store';
-import { Domain, Confidence, ExplainResponse, LearningSignal, PairDrillResult, Question, TeachBackResult } from '@/lib/types';
-import { getDomainRatingHistory, latestDomainRating, latestRating, ratingLevel, scoreResponse, selectAdaptiveQuestion, updateRating } from '@/lib/adaptive';
+import { addAttempt, isValidPracticeSession, setPendingAnswer, toggleBookmark, useProgressStore } from '@/lib/store';
+import { Domain, Confidence, ExplainResponse, LearningSignal, PairDrillResult, PracticeSessionState, Question, TeachBackResult } from '@/lib/types';
+import { formatRating, getDomainRatingHistory, latestDomainRating, latestRating, ratingLevel, scoreResponse, selectAdaptiveQuestion, updateRating } from '@/lib/adaptive';
 import { confusionPairs } from '@/data/confusionPairs';
 import { findTriggeredPair, getPairStatus, pairTriggerCount } from '@/lib/pairs';
 import { gradeExplanationFallback, parseGradeResponse } from '@/lib/teachback';
 import { classifyLearningSignal, signalGuidance, signalLabel } from '@/lib/confidence';
-import { captureSubmittedAnswer, canChangeSelection, isSelectionCorrect, resolvePendingAnswer, shouldRecordBeforeAdvance, withPhase, withTeachBack } from '@/lib/practice-flow';
+import { captureSubmittedAnswer, canChangeSelection, getCorrectAnswerDisplay, isSelectionCorrect, resolvePendingAnswer, shouldRecordBeforeAdvance, withPhase, withTeachBack } from '@/lib/practice-flow';
 import { parseProgress, serializeProgress } from '@/lib/progress-io';
 import { createDemoProgress } from '@/lib/demo';
 
@@ -48,7 +48,7 @@ export default function HomePage() {
   const pendingAnswer = useProgressStore((state) => state.pendingAnswer);
   const [selectedDomains, setSelectedDomains] = useState<Domain[]>([...DOMAINS]);
   const [difficulty, setDifficulty] = useState<number | null>(null);
-  const [count, setCount] = useState(10);
+  const [count, setCount] = useState(30);
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
   const [teachBackEnabled, setTeachBackEnabled] = useState(false);
   const [teachBackText, setTeachBackText] = useState('');
@@ -86,6 +86,7 @@ export default function HomePage() {
   const [subtopicChange, setSubtopicChange] = useState<{ before: number; after: number } | null>(null);
   const [showRatingMath, setShowRatingMath] = useState(false);
   const [activePairId, setActivePairId] = useState<string | null>(null);
+  const [practiceSessionMode, setPracticeSessionMode] = useState<PracticeSessionState['mode']>('practice');
   const [pairDrillStartedAt, setPairDrillStartedAt] = useState<number | null>(null);
   const [pairBaselineAccuracy, setPairBaselineAccuracy] = useState(0);
   const [pairDrillResult, setPairDrillResult] = useState<PairDrillResult | null>(null);
@@ -128,6 +129,8 @@ export default function HomePage() {
     const priorAccuracy = existingPairAttempts.length
       ? Math.round((existingPairAttempts.filter((attempt) => attempt.correct).length / existingPairAttempts.length) * 100)
       : 0;
+    const sessions = useProgressStore.getState().sessions;
+    useProgressStore.setState({ sessions: { ...sessions, practice: null, exam: null } });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuestions(drillQuestions);
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -144,6 +147,8 @@ export default function HomePage() {
     setIsExamMode(false);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePairId(pair.id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPracticeSessionMode('pair-drill');
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPairDrillStartedAt(Date.now());
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -195,23 +200,69 @@ export default function HomePage() {
   useEffect(() => {
     const savedExam = useProgressStore.getState().sessions as Record<string, ExamSessionState | undefined> | undefined;
     const activeExam = savedExam?.exam as ExamSessionState | undefined;
-    if (!activeExam || !Array.isArray(activeExam.questions) || !activeExam.questions.length) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuestions(activeExam.questions);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCurrentIndex(activeExam.currentIndex ?? 0);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSelectedAnswer(activeExam.answers?.[activeExam.questions[activeExam.currentIndex ?? 0]?.id] ?? []);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setExamAnswers(activeExam.answers ?? {});
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFlagged(activeExam.flagged ?? []);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTimeLeft(activeExam.timeLeft ?? 45 * 60);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setExamStartedAt(activeExam.startedAt ?? Date.now());
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsExamMode(true);
+    if (activeExam && Array.isArray(activeExam.questions) && activeExam.questions.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuestions(activeExam.questions);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrentIndex(activeExam.currentIndex ?? 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedAnswer(activeExam.answers?.[activeExam.questions[activeExam.currentIndex ?? 0]?.id] ?? []);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExamAnswers(activeExam.answers ?? {});
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFlagged(activeExam.flagged ?? []);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTimeLeft(activeExam.timeLeft ?? 45 * 60);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExamStartedAt(activeExam.startedAt ?? Date.now());
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsExamMode(true);
+    } else if (!new URLSearchParams(window.location.search).has('drill')) {
+      const activePractice = savedExam?.practice;
+      if (!isValidPracticeSession(activePractice)) return;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuestions(activePractice.questions);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAdaptivePool(activePractice.adaptivePool);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrentIndex(activePractice.currentIndex);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedAnswer(activePractice.selectedAnswer);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSessionTarget(activePractice.sessionTarget);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAdaptiveEnabled(activePractice.adaptiveEnabled);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedDomains(activePractice.selectedDomains);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDifficulty(activePractice.difficulty);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCount(activePractice.count);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSubmitted(activePractice.submitted);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFeedbackOpen(activePractice.feedbackOpen);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTeachBackText(activePractice.teachBackText);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTeachBackResult(activePractice.teachBackResult);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLearningSignal(activePractice.learningSignal);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActivePairId(activePractice.activePairId);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPracticeSessionMode(activePractice.mode);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPairDrillStartedAt(activePractice.pairDrillStartedAt);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPairBaselineAccuracy(activePractice.pairBaselineAccuracy);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRatingDelta(activePractice.ratingDelta);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSubtopicChange(activePractice.subtopicChange);
+    } else {
+      return;
+    }
 
     // Sync local UI state from a restored pending answer. The pending answer
     // lives in the progress store so it survives navigation, refresh and
@@ -221,8 +272,6 @@ export default function HomePage() {
     if (restored) {
       if (restored.phase === 'awaiting-teach-back') {
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setTeachBackText('');
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTeachBackResult(null);
       } else if (restored.teachBack) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -230,6 +279,62 @@ export default function HomePage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (isExamMode || !questions.length || examResult) return;
+    const session: PracticeSessionState = {
+      mode: practiceSessionMode,
+      questions,
+      adaptivePool,
+      currentIndex,
+      selectedAnswer,
+      sessionTarget,
+      adaptiveEnabled,
+      selectedDomains,
+      difficulty,
+      count,
+      submitted,
+      feedbackOpen,
+      teachBackText,
+      teachBackResult,
+      learningSignal,
+      activePairId,
+      pairDrillStartedAt,
+      pairBaselineAccuracy,
+      ratingDelta,
+      subtopicChange,
+    };
+    const saveSession = () => {
+      useProgressStore.setState({
+        sessions: { ...useProgressStore.getState().sessions, practice: session },
+      });
+    };
+    saveSession();
+    window.addEventListener('pagehide', saveSession);
+    return () => window.removeEventListener('pagehide', saveSession);
+  }, [
+    isExamMode,
+    questions,
+    examResult,
+    adaptivePool,
+    currentIndex,
+    selectedAnswer,
+    sessionTarget,
+    adaptiveEnabled,
+    selectedDomains,
+    difficulty,
+    count,
+    submitted,
+    feedbackOpen,
+    teachBackText,
+    teachBackResult,
+    learningSignal,
+    activePairId,
+    pairDrillStartedAt,
+    pairBaselineAccuracy,
+    ratingDelta,
+    subtopicChange,
+  ]);
 
 
   useEffect(() => {
@@ -302,6 +407,11 @@ export default function HomePage() {
     );
   }
 
+  function clearStoredSession(name: 'exam' | 'practice') {
+    const sessions = useProgressStore.getState().sessions;
+    useProgressStore.setState({ sessions: { ...sessions, [name]: null } });
+  }
+
   function startPairDrill(pairId: string) {
     const pair = confusionPairs.find((item) => item.id === pairId);
     if (!pair) return;
@@ -310,6 +420,7 @@ export default function HomePage() {
       .filter((question): question is Question => Boolean(question));
     if (drillQuestions.length !== 5) return;
     const previous = attempts.filter((attempt) => attempt.pairId === pairId);
+    clearStoredSession('practice');
     setPairBaselineAccuracy(previous.length
       ? Math.round((previous.filter((attempt) => attempt.correct).length / previous.length) * 100)
       : 0);
@@ -330,6 +441,8 @@ export default function HomePage() {
     setFlagged([]);
     setSessionTarget(5);
     setActivePairId(pairId);
+    setPracticeSessionMode('pair-drill');
+    clearStoredSession('exam');
     setPairDrillStartedAt(Date.now());
     setPairDrillResult(null);
     setRatingDelta(null);
@@ -338,6 +451,9 @@ export default function HomePage() {
 
   function startPractice() {
     flushPendingAnswer();
+    clearStoredSession('exam');
+    clearStoredSession('practice');
+    setPracticeSessionMode('practice');
     const pool = buildPracticeSet(questionBank, selectedDomains, difficulty, count, Date.now());
     const next = pool.map((question, index) => shuffleOptions(question, index + 1));
     const firstQuestion = adaptiveEnabled
@@ -371,7 +487,8 @@ export default function HomePage() {
 
   function startExam() {
     flushPendingAnswer();
-    const examPool = buildExamSet(questionBank, Date.now(), 40);
+    clearStoredSession('practice');
+    const examPool = buildExamSet(questionBank, Date.now(), 50);
     const next = examPool.map((question, index) => shuffleOptions(question, index + 7));
     setQuestions(next);
     setAdaptivePool([]);
@@ -399,6 +516,9 @@ export default function HomePage() {
 
   function startRemediation() {
     flushPendingAnswer();
+    clearStoredSession('exam');
+    clearStoredSession('practice');
+    setPracticeSessionMode('remediation');
     const pool = buildRemediationSet(questionBank, attempts, Date.now(), 10);
     const next = pool.map((question, index) => shuffleOptions(question, index + 3));
     const firstQuestion = adaptiveEnabled
@@ -435,7 +555,9 @@ export default function HomePage() {
     setSubmitted(false);
     setFeedbackOpen(false);
     setIsExamMode(shouldForceSubmit ? true : false);
-    useProgressStore.setState({ sessions: { ...(useProgressStore.getState().sessions ?? {}), exam: null } });
+    useProgressStore.setState({
+      sessions: { ...useProgressStore.getState().sessions, exam: null, practice: null },
+    });
     const scoredAttempts = questions.map((question) => {
       const chosen = [...(answerMap[question.id] ?? [])].sort();
       const isCorrect = isSelectionCorrect(question, chosen);
@@ -649,30 +771,6 @@ export default function HomePage() {
         setSelectedAnswer(examAnswers[questions[currentIndex + 1].id] ?? []);
         return;
       }
-      if (adaptiveEnabled && questions.length < sessionTarget) {
-        const nextQuestion = selectAdaptiveQuestion(
-          adaptivePool,
-          latestRating(useProgressStore.getState().attempts),
-          useProgressStore.getState().attempts,
-          questions.map((question) => question.id),
-          Math.random,
-          (question) => latestDomainRating(useProgressStore.getState().attempts, question.domain, questionBank),
-        );
-        if (nextQuestion) {
-          setQuestions((current) => [...current, nextQuestion]);
-          setCurrentIndex((index) => index + 1);
-          setSelectedAnswer([]);
-          setSubmitted(false);
-          setFeedbackOpen(false);
-          setPendingAnswer(null);
-          setLearningSignal(null);
-          setTeachBackText('');
-          setTeachBackResult(null);
-          setAiResponse(null);
-          setRatingDelta(null);
-          return;
-        }
-      }
       finishExam(true);
       return;
     }
@@ -690,6 +788,32 @@ export default function HomePage() {
       setRatingDelta(null);
       setSubtopicChange(null);
       return;
+    }
+    if (adaptiveEnabled && questions.length < sessionTarget) {
+      const currentAttempts = useProgressStore.getState().attempts;
+      const nextQuestion = selectAdaptiveQuestion(
+        adaptivePool,
+        latestRating(currentAttempts),
+        currentAttempts,
+        questions.map((question) => question.id),
+        Math.random,
+        (question) => latestDomainRating(currentAttempts, question.domain, questionBank),
+      );
+      if (nextQuestion) {
+        setQuestions((current) => [...current, nextQuestion]);
+        setCurrentIndex((index) => index + 1);
+        setSelectedAnswer([]);
+        setSubmitted(false);
+        setFeedbackOpen(false);
+        setPendingAnswer(null);
+        setLearningSignal(null);
+        setTeachBackText('');
+        setTeachBackResult(null);
+        setAiResponse(null);
+        setRatingDelta(null);
+        setSubtopicChange(null);
+        return;
+      }
     }
     if (activePairId && pairDrillStartedAt !== null) {
       const drillAttempts = useProgressStore.getState().attempts.filter(
@@ -710,6 +834,7 @@ export default function HomePage() {
       setPairDrillResult(result);
       setPairDrillStartedAt(null);
     }
+    clearStoredSession('practice');
     setCurrentIndex(0);
     setQuestions([]);
     setSelectedAnswer([]);
@@ -768,6 +893,8 @@ export default function HomePage() {
 
   function loadDemoData() {
     useProgressStore.setState(createDemoProgress(Date.now()));
+    clearStoredSession('practice');
+    clearStoredSession('exam');
     setTeachBackEnabled(true);
     setAdaptiveEnabled(true);
     setQuestions([]);
@@ -937,7 +1064,7 @@ export default function HomePage() {
             <div>
               <p className="text-sm text-slate-500">Adaptive learning rating</p>
               <p className="mt-1 flex items-center gap-2 text-2xl font-semibold">
-                {currentRating} <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-800 dark:bg-sky-950 dark:text-sky-200">{currentLevel}</span>
+                {formatRating(currentRating)} <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-800 dark:bg-sky-950 dark:text-sky-200">{currentLevel}</span>
               </p>
             </div>
             <p className="max-w-xl text-sm text-slate-600 dark:text-slate-300">
@@ -949,7 +1076,7 @@ export default function HomePage() {
               <LineChart data={ratingHistory}>
                 <XAxis dataKey="label" tickLine={false} axisLine={false} />
                 <YAxis domain={[600, 1800]} tickLine={false} axisLine={false} />
-                <Tooltip />
+                <Tooltip formatter={(value) => typeof value === 'number' ? formatRating(value) : value} />
                 <Line type="monotone" dataKey="cloud-concepts" name="Cloud concepts" stroke={DASH_COLORS['cloud-concepts']} dot={false} />
                 <Line type="monotone" dataKey="architecture-services" name="Architecture & services" stroke={DASH_COLORS['architecture-services']} dot={false} />
                 <Line type="monotone" dataKey="management-governance" name="Management & governance" stroke={DASH_COLORS['management-governance']} dot={false} />
@@ -1052,9 +1179,9 @@ export default function HomePage() {
                 <label className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                   <span className="mb-2 block text-sm font-medium">Question count</span>
                   <select className="w-full bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100" value={count} onChange={(event) => setCount(Number(event.target.value))}>
-                    <option value={5}>5</option>
                     <option value={10}>10</option>
                     <option value={20}>20</option>
+                    <option value={30}>30</option>
                   </select>
                 </label>
               </div>
@@ -1082,6 +1209,7 @@ export default function HomePage() {
                 </div>
 
                 <p className="text-lg font-medium">{currentIndex + 1}. {currentQuestion.stem}</p>
+                <p className="text-xs text-slate-500">Question {currentIndex + 1} of {sessionTarget}</p>
                 {activePairId && confusionPairs.find((pair) => pair.id === activePairId) && (
                   <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/30">
                     <div className="grid gap-3 md:grid-cols-2">
@@ -1191,10 +1319,7 @@ export default function HomePage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     <span className="font-medium">{isSelectionCorrect(currentQuestion, selectedAnswer) ? 'Correct.' : 'Not quite.'}</span>
                     <span className="ml-2">
-                      Correct answer: {currentQuestion.options
-                        .filter((option) => currentQuestion.correct.includes(option.id))
-                        .map((option) => option.text)
-                        .join(', ')}
+                      Correct answer: {getCorrectAnswerDisplay(currentQuestion)}
                     </span>
                   </div>
                 )}
@@ -1204,7 +1329,7 @@ export default function HomePage() {
                     {submitted ? 'Answered' : 'Submit'}
                   </button>
                   <button onClick={handleNext} disabled={awaitingTeachBack} className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    {currentIndex === questions.length - 1 ? 'Finish' : 'Next'}
+                    {currentIndex === questions.length - 1 && (isExamMode || !adaptiveEnabled || questions.length >= sessionTarget) ? 'Finish' : 'Next'}
                   </button>
                   <button onClick={handleExplain} className="rounded-full border px-4 py-2">
                     Explain
@@ -1333,7 +1458,7 @@ export default function HomePage() {
                 <motion.li initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
                   <span className="block font-semibold">2 · Tracked</span>
                   {ratingDelta ? (
-                    <span>Rating {ratingDelta.before} → {ratingDelta.after} ({ratingDelta.delta >= 0 ? '+' : ''}{ratingDelta.delta.toFixed(0)})</span>
+                    <span>Rating {formatRating(ratingDelta.before)} → {formatRating(ratingDelta.after)} ({ratingDelta.delta >= 0 ? '+' : ''}{ratingDelta.delta.toFixed(0)})</span>
                   ) : <span>Answer recorded</span>}
                   {subtopicChange && <span className="block">Subtopic accuracy {subtopicChange.before}% → {subtopicChange.after}%</span>}
                 </motion.li>
@@ -1356,7 +1481,7 @@ export default function HomePage() {
                 <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   {ratingDelta.reason}{' '}
                   <button onClick={() => setShowRatingMath((visible) => !visible)} aria-expanded={showRatingMath} className="font-medium underline">Show the math</button>
-                  {showRatingMath && <span className="mt-1 block">Rating {ratingDelta.before} + {ratingDelta.kFactor} × ({ratingDelta.score.toFixed(2)} − {ratingDelta.expected.toFixed(2)}) = {ratingDelta.after.toFixed(0)}. Item rating is 1000/1200/1400 for easy/medium/hard questions.</span>}
+                  {showRatingMath && <span className="mt-1 block">Rating {formatRating(ratingDelta.before)} + {ratingDelta.kFactor} × ({ratingDelta.score.toFixed(2)} − {ratingDelta.expected.toFixed(2)}) = {formatRating(ratingDelta.after)}. Item rating is 1000/1200/1400 for easy/medium/hard questions.</span>}
                 </p>
               )}
               {teachBackResult && (
@@ -1384,7 +1509,7 @@ export default function HomePage() {
               <div className={`rounded-xl p-3 ${isSelectionCorrect(currentQuestion, selectedAnswer) ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                   {isSelectionCorrect(currentQuestion, selectedAnswer)
                     ? 'Correct — you matched the Azure concept.'
-                    : `Not quite — the correct answer is ${currentQuestion.correct.join(', ')}.`}
+                  : `Not quite — the correct answer is ${getCorrectAnswerDisplay(currentQuestion)}.`}
                 </div>
 
                 <div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expectedCorrectness, selectAdaptiveQuestion, scoreResponse, updateRating } from '@/lib/adaptive';
+import { expectedCorrectness, formatRating, selectAdaptiveQuestion, scoreResponse, updateRating } from '@/lib/adaptive';
 import { questionBank } from '@/data/index';
 import { LEARNING_CONFIG } from '@/lib/config';
 
@@ -7,6 +7,11 @@ describe('adaptive learning', () => {
   it('calculates the Elo expected score', () => {
     expect(expectedCorrectness(1200, 1200)).toBeCloseTo(0.5);
     expect(expectedCorrectness(1000, 1200)).toBeGreaterThan(0.5);
+  });
+
+  it('formats adaptive ratings as rounded whole numbers', () => {
+    expect(formatRating(1254.2973061853124)).toBe('1254');
+    expect(formatRating(1254.7)).toBe('1255');
   });
 
   it('uses partial credit and fragile teach-back adjustment', () => {

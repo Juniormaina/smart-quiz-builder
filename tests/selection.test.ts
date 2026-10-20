@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPracticeSet, shuffleOptions, shuffleSeeded } from '@/lib/selection';
+import { buildExamSet, buildPracticeSet, shuffleOptions, shuffleSeeded } from '@/lib/selection';
 import { questionBank } from '@/data/index';
 
 describe('Selection logic', () => {
@@ -13,6 +13,15 @@ describe('Selection logic', () => {
     const selected = buildPracticeSet(questionBank, ['cloud-concepts', 'architecture-services', 'management-governance'], null, 20, 99);
     expect(new Set(selected.map((question) => question.domain)).size).toBeGreaterThan(1);
     expect(selected.length).toBe(20);
+  });
+
+  it('provides the requested 30-question practice and 50-question exam sets', () => {
+    const practice = buildPracticeSet(questionBank, ['cloud-concepts', 'architecture-services', 'management-governance'], null, 30, 1234);
+    const exam = buildExamSet(questionBank, 1234);
+
+    expect(practice).toHaveLength(30);
+    expect(exam).toHaveLength(50);
+    expect(new Set(exam.map((question) => question.id)).size).toBe(50);
   });
 
   it('shuffles preserving the same order across the same seed', () => {

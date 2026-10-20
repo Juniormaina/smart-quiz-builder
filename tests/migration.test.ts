@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { migrateProgressState } from '@/lib/store';
+import { isValidPracticeSession, migrateProgressState } from '@/lib/store';
+import { questionBank } from '@/data/index';
+import { PracticeSessionState } from '@/lib/types';
+
+const practiceSession: PracticeSessionState = {
+  mode: 'practice',
+  questions: [questionBank[0]],
+  adaptivePool: [questionBank[0], questionBank[1]],
+  currentIndex: 0,
+  selectedAnswer: [questionBank[0].options[0].id],
+  sessionTarget: 30,
+  adaptiveEnabled: true,
+  selectedDomains: ['cloud-concepts', 'architecture-services', 'management-governance'],
+  difficulty: null,
+  count: 30,
+  submitted: false,
+  feedbackOpen: false,
+  teachBackText: '',
+  teachBackResult: null,
+  learningSignal: null,
+  activePairId: null,
+  pairDrillStartedAt: null,
+  pairBaselineAccuracy: 0,
+  ratingDelta: null,
+  subtopicChange: null,
+};
 
 describe('progress migration', () => {
   it('preserves v1 attempts and adds v2 tracking defaults', () => {
@@ -58,5 +83,21 @@ describe('progress migration', () => {
     }, 3);
 
     expect(state.pendingAnswer).toBeNull();
+  });
+
+  it('validates a persisted practice session and rejects invalid positions', () => {
+    expect(isValidPracticeSession(practiceSession)).toBe(true);
+    expect(isValidPracticeSession({ ...practiceSession, currentIndex: 1 })).toBe(false);
+  });
+
+  it('preserves practice sessions while migrating v3 progress', () => {
+    const state = migrateProgressState({
+      attempts: [],
+      bookmarks: {},
+      pendingAnswer: null,
+      sessions: { practice: practiceSession },
+    }, 3);
+
+    expect(state.sessions.practice).toEqual(practiceSession);
   });
 });
