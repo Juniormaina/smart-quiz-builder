@@ -2,6 +2,8 @@ export type Domain = 'cloud-concepts' | 'architecture-services' | 'management-go
 export type Difficulty = 1 | 2 | 3;
 export type QType = 'single' | 'multi' | 'yes-no-statements';
 export type Mode = 'practice' | 'exam' | 'remediation';
+export type Confidence = 'confident' | 'unsure';
+export type LearningSignal = 'correct-confident' | 'correct-unsure' | 'incorrect-confident' | 'incorrect-unsure';
 export type TeachBackScore = 0 | 1 | 2;
 export type TeachBackSource = 'ai' | 'fallback';
 
@@ -69,6 +71,7 @@ export interface Attempt {
   ratingAfter: number;
   pairId?: string;
   teachBack?: TeachBackResult;
+  confidence?: Confidence;
 }
 
 export type QuestionInput = Omit<Question, 'explanation' | 'pairId'> & {
@@ -82,9 +85,32 @@ export interface BookmarkState {
   [qid: string]: boolean;
 }
 
+export type PendingPhase = 'awaiting-teach-back' | 'awaiting-confidence';
+
+/**
+ * A submitted practice answer that has not been recorded yet.
+ *
+ * The learner's answer is captured the moment it is submitted, together with
+ * the correctness computed at that moment. Later UI state (for example a
+ * changed selection while the confidence prompt is open) must never change
+ * what gets recorded.
+ *
+ * `phase` describes what the learner is being asked for next:
+ * - 'awaiting-teach-back'  → the learner is writing an explanation.
+ * - 'awaiting-confidence'  → the learner is rating their own confidence.
+ */
+export type PendingAnswer = {
+  qid: string;
+  chosen: string[];
+  correct: boolean;
+  phase: PendingPhase;
+  teachBack?: TeachBackResult;
+};
+
 export interface ProgressState {
   attempts: Attempt[];
   bookmarks: BookmarkState;
+  pendingAnswer: PendingAnswer | null;
   sessions: Record<string, unknown> & {
     pairDrills?: Record<string, PairDrillResult>;
     demo?: { enabled: boolean; startingRating: number };

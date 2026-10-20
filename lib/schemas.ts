@@ -43,6 +43,7 @@ export const attemptSchema = z.object({
   ratingAfter: ratingSchema,
   pairId: z.string().optional(),
   teachBack: teachBackResultSchema.optional(),
+  confidence: z.enum(['confident', 'unsure']).optional(),
 });
 
 export const optionSchema = z.object({

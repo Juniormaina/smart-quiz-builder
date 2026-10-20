@@ -10,7 +10,7 @@ const mechanisms = [
   },
   {
     title: 'Tracked',
-    summary: 'Each answer updates a transparent Elo-style rating and subtopic accuracy. Correctness, question difficulty, and optional teach-back quality all contribute to the record.',
+    summary: 'Each recorded attempt updates a transparent Elo-style rating and subtopic accuracy. Correctness, question difficulty, and optional teach-back quality all contribute to the record. Self-reported confidence is stored as a learning signal for one answer only, and it never changes the rating.',
   },
   {
     title: 'Adapted',
