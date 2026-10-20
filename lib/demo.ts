@@ -1,6 +1,6 @@
 import { questionBank } from '@/data/index';
 import { LEARNING_CONFIG } from '@/lib/config';
-import { ProgressState } from '@/lib/types';
+import { Confidence, ProgressState } from '@/lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -13,6 +13,12 @@ export function createDemoProgress(now: number): ProgressState {
     const wrongOption = question.options.find((option) => !question.correct.includes(option.id));
     const chosen = isCorrect ? question.correct : [wrongOption?.id ?? question.options[0].id];
     const ratingBefore = 990 + index * 5;
+    // Confidence is a learning signal, not a knowledge score. The demo
+    // includes a mix of the four signals so the feedback drawer has examples
+    // of fragile-correct and confident-incorrect answers to inspect.
+    const confidence: Confidence = isCorrect
+      ? (index % 7 === 0 ? 'unsure' : 'confident')
+      : (index % 5 === 0 ? 'confident' : 'unsure');
     return {
       qid: question.id,
       chosen,
@@ -23,6 +29,7 @@ export function createDemoProgress(now: number): ProgressState {
       ratingBefore,
       ratingAfter: ratingBefore + (isCorrect ? 5 : -4),
       pairId: question.pairId,
+      confidence,
     };
   });
 
@@ -40,12 +47,14 @@ export function createDemoProgress(now: number): ProgressState {
       ratingBefore: 1290 + index * 3,
       ratingAfter: 1278 + index * 3,
       pairId: 'policy-vs-rbac',
+      confidence: 'confident',
     });
   }
 
   return {
     attempts,
     bookmarks: {},
+    pendingAnswer: null,
     sessions: {
       pairDrills: {
         'locks-vs-policy': {

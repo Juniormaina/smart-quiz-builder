@@ -139,6 +139,12 @@ Use only the supplied authored question explanation and key concepts as the sour
 
 The route validates request and response shapes, rejects concept names outside the question’s authored allowlist, caps learner text at 240 characters, rate-limits each learning session, retries malformed model output once, and falls back to deterministic grading when no key is configured or grading fails.
 
+## Confidence and learning signals
+
+After a practice answer is submitted, the learner is asked how confident they were: Confident, Unsure, or Skip. The answer is recorded either way, so no submitted answer is lost; Skip stores no confidence value at all rather than inventing one. If the learner advances or finishes while the prompt is still open, the answer is recorded without a confidence value.
+
+The stored value produces one of four learning signals for that single answer — correct-confident, correct-unsure, incorrect-confident, incorrect-unsure — shown in the feedback drawer next to the teach-back score. A signal describes one answer, not measured mastery, and it never changes the Elo rating, adaptive selection, or exam scoring. Confidence is stored on the attempt, so it survives export and import; exports written before confidence tracking remain valid, and an unrecognized confidence value in an imported file is discarded rather than rejecting the file.
+
 Worked examples for a Policy vs RBAC question:
 
 | Learner response | Expected result |
@@ -161,7 +167,7 @@ The latest detailed table is in [`evals/results.md`](./evals/results.md).
 1. Run `npm run dev` and open `http://localhost:3000/?demo=1` (or click **Load demo data**).
 2. Confirm that teach-back is enabled and that the dashboard shows a rising rating history. The demo profile has 60 attempts across seven days, two recent Policy/RBAC mistakes, and one resolved pair.
 3. Open **Confusion-pair drills** and start **Azure Policy vs Azure RBAC**.
-4. Answer the first Policy/RBAC question incorrectly. Submit a one-sentence teach-back or skip it; the trace shows the rating change, and the pair suggestion unlocks.
+4. Answer the first Policy/RBAC question incorrectly. Submit a one-sentence teach-back or skip it, then rate your confidence or skip that too; the trace shows the rating change and the learning signal, and the pair suggestion unlocks.
 5. Start the pair drill from the suggestion, answer at least four of five correctly, and finish to see the pair marked Resolved.
 6. Return to the dashboard to see the rating chart and try another adaptive practice question; finish at `/how-it-works` to explain the loop.
 

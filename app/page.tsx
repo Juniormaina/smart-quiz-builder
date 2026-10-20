@@ -8,12 +8,15 @@ import { Bar, BarChart, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusA
 import { questionBank } from '@/data/index';
 import { buildExamSet, buildPracticeSet, buildRemediationSet, shuffleOptions } from '@/lib/selection';
 import { calculateAccuracy, calculateStreak, countAnsweredQuestions, getAccuracyTrend, getDomainBreakdown, getExamResults, getWeakSubtopics } from '@/lib/scoring';
-import { addAttempt, toggleBookmark, useProgressStore } from '@/lib/store';
-import { Domain, ExplainResponse, PairDrillResult, Question, TeachBackResult } from '@/lib/types';
+import { addAttempt, setPendingAnswer, toggleBookmark, useProgressStore } from '@/lib/store';
+import { Domain, Confidence, ExplainResponse, LearningSignal, PairDrillResult, Question, TeachBackResult } from '@/lib/types';
 import { getDomainRatingHistory, latestDomainRating, latestRating, ratingLevel, scoreResponse, selectAdaptiveQuestion, updateRating } from '@/lib/adaptive';
 import { confusionPairs } from '@/data/confusionPairs';
 import { findTriggeredPair, getPairStatus, pairTriggerCount } from '@/lib/pairs';
 import { gradeExplanationFallback, parseGradeResponse } from '@/lib/teachback';
+import { classifyLearningSignal, signalGuidance, signalLabel } from '@/lib/confidence';
+import { captureSubmittedAnswer, canChangeSelection, isSelectionCorrect, resolvePendingAnswer, shouldRecordBeforeAdvance, withPhase, withTeachBack } from '@/lib/practice-flow';
+import { parseProgress, serializeProgress } from '@/lib/progress-io';
 import { createDemoProgress } from '@/lib/demo';
 
 type ExamResult = ReturnType<typeof getExamResults>;
@@ -42,14 +45,20 @@ const DASH_COLORS: Record<Domain, string> = {
 export default function HomePage() {
   const attempts = useProgressStore((state) => state.attempts);
   const bookmarks = useProgressStore((state) => state.bookmarks);
+  const pendingAnswer = useProgressStore((state) => state.pendingAnswer);
   const [selectedDomains, setSelectedDomains] = useState<Domain[]>([...DOMAINS]);
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [count, setCount] = useState(10);
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
   const [teachBackEnabled, setTeachBackEnabled] = useState(false);
-  const [awaitingTeachBack, setAwaitingTeachBack] = useState(false);
   const [teachBackText, setTeachBackText] = useState('');
   const [teachBackResult, setTeachBackResult] = useState<TeachBackResult | null>(null);
+  const [learningSignal, setLearningSignal] = useState<LearningSignal | 'unknown' | null>(null);
+  // The pending answer is the single source of truth for the answer steps:
+  // while it exists the answer is frozen and not yet recorded. It lives in
+  // the progress store so it survives navigation, refresh and page unload.
+  const awaitingTeachBack = pendingAnswer?.phase === 'awaiting-teach-back';
+  const awaitingConfidence = pendingAnswer?.phase === 'awaiting-confidence';
   const [showModelAnswer, setShowModelAnswer] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [themeInitialized, setThemeInitialized] = useState(false);
@@ -81,6 +90,7 @@ export default function HomePage() {
   const [pairBaselineAccuracy, setPairBaselineAccuracy] = useState(0);
   const [pairDrillResult, setPairDrillResult] = useState<PairDrillResult | null>(null);
   const [dismissedPairId, setDismissedPairId] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const currentQuestion = questions[currentIndex] ?? null;
   const accuracy = calculateAccuracy(attempts);
@@ -202,7 +212,25 @@ export default function HomePage() {
     setExamStartedAt(activeExam.startedAt ?? Date.now());
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsExamMode(true);
+
+    // Sync local UI state from a restored pending answer. The pending answer
+    // lives in the progress store so it survives navigation, refresh and
+    // page unload; when it is restored we must bring the teach-back text and
+    // result back into component state so the UI shows the same thing.
+    const restored = useProgressStore.getState().pendingAnswer;
+    if (restored) {
+      if (restored.phase === 'awaiting-teach-back') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTeachBackText('');
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTeachBackResult(null);
+      } else if (restored.teachBack) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTeachBackResult(restored.teachBack);
+      }
+    }
   }, []);
+
 
   useEffect(() => {
     if (!isExamMode || !questions.length || examResult) return;
@@ -238,7 +266,9 @@ export default function HomePage() {
       const key = Number(event.key);
       if (key >= 1 && key <= 4) {
         const option = currentQuestion.options[key - 1];
-        if (option) handleChoice(option.id);
+        // A submitted answer is frozen while the learner is asked for a
+        // teach-back or for their confidence.
+        if (option && canChangeSelection({ submitted, pending: pendingAnswer })) handleChoice(option.id);
       }
       if (event.key === 'Enter') {
         if (selectedAnswer.length > 0 || currentQuestion.type === 'single') {
@@ -255,20 +285,14 @@ export default function HomePage() {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [currentQuestion, selectedAnswer, submitted]);
-
-  function isSelectionCorrect(question: Question, selection: string[]) {
-    const orderedSelected = [...selection].sort();
-    const orderedCorrect = [...question.correct].sort();
-    return orderedSelected.length === orderedCorrect.length && orderedSelected.every((value, index) => value === orderedCorrect[index]);
-  }
+  }, [currentQuestion, selectedAnswer, submitted, pendingAnswer]);
 
   function levelForRating(rating: number) {
     return ratingLevel(rating);
   }
 
   function handleChoice(optionId: string) {
-    if (!currentQuestion || submitted || awaitingTeachBack) return;
+    if (!currentQuestion || !canChangeSelection({ submitted, pending: pendingAnswer })) return;
     if (currentQuestion.type === 'single') {
       setSelectedAnswer([optionId]);
       return;
@@ -289,12 +313,17 @@ export default function HomePage() {
     setPairBaselineAccuracy(previous.length
       ? Math.round((previous.filter((attempt) => attempt.correct).length / previous.length) * 100)
       : 0);
+    flushPendingAnswer();
     setQuestions(drillQuestions);
     setAdaptivePool([]);
     setCurrentIndex(0);
     setSelectedAnswer([]);
     setSubmitted(false);
     setFeedbackOpen(false);
+    setPendingAnswer(null);
+    setLearningSignal(null);
+    setTeachBackText('');
+    setTeachBackResult(null);
     setIsExamMode(false);
     setExamResult(null);
     setExamAnswers({});
@@ -308,6 +337,7 @@ export default function HomePage() {
   }
 
   function startPractice() {
+    flushPendingAnswer();
     const pool = buildPracticeSet(questionBank, selectedDomains, difficulty, count, Date.now());
     const next = pool.map((question, index) => shuffleOptions(question, index + 1));
     const firstQuestion = adaptiveEnabled
@@ -321,6 +351,10 @@ export default function HomePage() {
     setSelectedAnswer([]);
     setSubmitted(false);
     setFeedbackOpen(false);
+    setPendingAnswer(null);
+    setLearningSignal(null);
+    setTeachBackText('');
+    setTeachBackResult(null);
     setAiResponse(null);
     setIsExamMode(false);
     setExamResult(null);
@@ -336,6 +370,7 @@ export default function HomePage() {
   }
 
   function startExam() {
+    flushPendingAnswer();
     const examPool = buildExamSet(questionBank, Date.now(), 40);
     const next = examPool.map((question, index) => shuffleOptions(question, index + 7));
     setQuestions(next);
@@ -345,6 +380,10 @@ export default function HomePage() {
     setSelectedAnswer([]);
     setSubmitted(false);
     setFeedbackOpen(false);
+    setPendingAnswer(null);
+    setLearningSignal(null);
+    setTeachBackText('');
+    setTeachBackResult(null);
     setIsExamMode(true);
     setExamAnswers({});
     setFlagged([]);
@@ -356,11 +395,10 @@ export default function HomePage() {
     setPairDrillStartedAt(null);
     setRatingDelta(null);
     setSubtopicChange(null);
-    setRatingDelta(null);
-    setSubtopicChange(null);
   }
 
   function startRemediation() {
+    flushPendingAnswer();
     const pool = buildRemediationSet(questionBank, attempts, Date.now(), 10);
     const next = pool.map((question, index) => shuffleOptions(question, index + 3));
     const firstQuestion = adaptiveEnabled
@@ -373,6 +411,10 @@ export default function HomePage() {
     setSelectedAnswer([]);
     setSubmitted(false);
     setFeedbackOpen(false);
+    setPendingAnswer(null);
+    setLearningSignal(null);
+    setTeachBackText('');
+    setTeachBackResult(null);
     setIsExamMode(false);
     setExamResult(null);
     setExamAnswers({});
@@ -412,11 +454,10 @@ export default function HomePage() {
   }
 
   function handleSubmit() {
-    if (!currentQuestion || awaitingTeachBack) return;
-    const orderedSelected = [...selectedAnswer].sort();
-    const isCorrect = isSelectionCorrect(currentQuestion, orderedSelected);
+    if (!currentQuestion || awaitingTeachBack || awaitingConfidence) return;
 
     if (isExamMode) {
+      const orderedSelected = [...selectedAnswer].sort();
       const nextAnswers = { ...examAnswers, [currentQuestion.id]: orderedSelected };
       setExamAnswers(nextAnswers);
       if (currentIndex >= questions.length - 1) {
@@ -431,27 +472,40 @@ export default function HomePage() {
       return;
     }
 
+    // Capture the submitted answer now. Everything that follows (teach-back,
+    // confidence, advancing) works from this snapshot, so the recorded answer
+    // always matches what the learner actually submitted.
+    setPendingAnswer(captureSubmittedAnswer(
+      currentQuestion,
+      selectedAnswer,
+      teachBackEnabled ? 'awaiting-teach-back' : 'awaiting-confidence',
+    ));
+    setLearningSignal(null);
     if (teachBackEnabled) {
-      setAwaitingTeachBack(true);
       setTeachBackText('');
       setTeachBackResult(null);
-      return;
     }
-    recordPracticeAnswer();
   }
 
-  function recordPracticeAnswer(gradedTeachBack?: TeachBackResult) {
-    if (!currentQuestion) return;
-    const orderedSelected = [...selectedAnswer].sort();
-    const isCorrect = isSelectionCorrect(currentQuestion, orderedSelected);
+  function recordPracticeAnswer(gradedConfidence?: Confidence, openFeedback = true) {
+    const pending = pendingAnswer;
+    if (!pending) return;
+    const question = questionBank.find((item) => item.id === pending.qid);
+    if (!question) {
+      setPendingAnswer(null);
+      return;
+    }
+    const orderedSelected = pending.chosen;
+    const isCorrect = pending.correct;
+    const gradedTeachBack = pending.teachBack;
     const currentAttempts = useProgressStore.getState().attempts;
     const before = latestRating(currentAttempts);
     const domainAttempts = useProgressStore.getState().attempts.filter((attempt) =>
-      questionBank.find((question) => question.id === attempt.qid)?.domain === currentQuestion.domain,
+      questionBank.find((item) => item.id === attempt.qid)?.domain === question.domain,
     ).length;
-    const responseScore = scoreResponse(currentQuestion, orderedSelected, gradedTeachBack?.score);
-    const ratingUpdate = updateRating(before, currentQuestion, responseScore, domainAttempts);
-    const subtopicQuestionIds = new Set(questionBank.filter((question) => question.subtopic === currentQuestion.subtopic).map((question) => question.id));
+    const responseScore = scoreResponse(question, orderedSelected, gradedTeachBack?.score);
+    const ratingUpdate = updateRating(before, question, responseScore, domainAttempts);
+    const subtopicQuestionIds = new Set(questionBank.filter((item) => item.subtopic === question.subtopic).map((item) => item.id));
     const priorSubtopicAttempts = useProgressStore.getState().attempts.filter((attempt) => subtopicQuestionIds.has(attempt.qid));
     const priorSubtopicAccuracy = priorSubtopicAttempts.length
       ? priorSubtopicAttempts.filter((attempt) => attempt.correct).length / priorSubtopicAttempts.length
@@ -462,18 +516,24 @@ export default function HomePage() {
       before: Math.round(priorSubtopicAccuracy * 100),
       after: Math.round(nextSubtopicAccuracy * 100),
     });
-    addAttempt({
-      qid: currentQuestion.id,
-      chosen: orderedSelected,
-      correct: isCorrect,
+    // Confidence is a learning signal only. It is recorded for feedback and
+    // future remediation hints; it must never influence the Elo rating,
+    // adaptive selection, exam scoring, or any mastery claim.
+    const signal = classifyLearningSignal(isCorrect, gradedConfidence);
+    setLearningSignal(signal);
+    const resolution = resolvePendingAnswer(pending, {
+      mode: 'practice',
       ms: 1200,
       ts: Date.now(),
-      mode: 'practice',
       ratingBefore: ratingUpdate.before,
       ratingAfter: ratingUpdate.after,
-      pairId: currentQuestion.pairId,
-      teachBack: gradedTeachBack,
-    });
+      pairId: question.pairId,
+    }, gradedConfidence);
+    if (!resolution.attempt) return;
+    // Clearing the pending answer is what guarantees an answer is recorded
+    // exactly once: a later advance finds nothing left to record.
+    setPendingAnswer(resolution.pending);
+    addAttempt(resolution.attempt);
     if (adaptiveEnabled) {
       setRatingDelta({
         before: ratingUpdate.before,
@@ -483,7 +543,7 @@ export default function HomePage() {
         expected: ratingUpdate.expected,
         kFactor: ratingUpdate.kFactor,
         reason: isCorrect
-          ? `${['Easy', 'Medium', 'Hard'][currentQuestion.difficulty - 1]} question, answered correctly${currentQuestion.type === 'single' && responseScore < 1 ? ' but teach-back was fragile' : ''}.`
+          ? `${['Easy', 'Medium', 'Hard'][question.difficulty - 1]} question, answered correctly${question.type === 'single' && responseScore < 1 ? ' but teach-back was fragile' : ''}.`
           : 'This question was harder than your current rating predicts.',
       });
       if (levelForRating(before) !== levelForRating(ratingUpdate.after)) {
@@ -495,20 +555,36 @@ export default function HomePage() {
       }
     }
 
-    if (isCorrect) {
-      confetti({ particleCount: 80, spread: 90, origin: { y: 0.7 } });
+    if (openFeedback) {
+      if (isCorrect) {
+        confetti({ particleCount: 80, spread: 90, origin: { y: 0.7 } });
+      }
+      setSubmitted(true);
+      setFeedbackOpen(true);
+      setTeachBackResult(gradedTeachBack ?? null);
+      setShowModelAnswer(false);
     }
+  }
 
-    setSubmitted(true);
-    setFeedbackOpen(true);
-    setAwaitingTeachBack(false);
-    setTeachBackResult(gradedTeachBack ?? null);
-    setShowModelAnswer(false);
+/**
+    * Record an answer the learner submitted but never confirmed, for example
+    * when they advance or finish while the confidence prompt is still open.
+    * The answer is stored without a confidence value: nothing is invented.
+    * The feedback drawer is opened so the learner can see whether the answer
+    * was correct before the next question appears.
+    */
+  function flushPendingAnswer() {
+    if (!shouldRecordBeforeAdvance(pendingAnswer)) return;
+    recordPracticeAnswer(undefined, true);
   }
 
   async function submitTeachBack() {
     if (!currentQuestion) return;
     const text = teachBackText.trim().slice(0, 240);
+    // Capture the question identity before awaiting the grader. If the learner
+    // advances or changes mode while grading is in flight, a late result must
+    // not be attached to an answer that has already been recorded.
+    const expectedQid = currentQuestion.id;
     let graded: Omit<TeachBackResult, 'text'> = gradeExplanationFallback(currentQuestion, text);
     try {
       let sessionId = window.sessionStorage.getItem('az900-learning-session');
@@ -533,14 +609,40 @@ export default function HomePage() {
     } catch (error) {
       console.error('Teach-back grader could not be reached; using deterministic fallback.', error);
     }
-    recordPracticeAnswer({ ...graded, text });
+    // Discard the result if the learner moved on while grading was in flight.
+    const current = useProgressStore.getState().pendingAnswer;
+    if (!current || current.qid !== expectedQid) return;
+    setTeachBackResult({ ...graded, text });
+    // Keep the graded result on the pending answer: it must survive the
+    // confidence step and still count towards the rating calculation.
+    setPendingAnswer((previous) => (previous
+      ? withTeachBack(withPhase(previous, 'awaiting-confidence'), { ...graded, text })
+      : previous));
+    setLearningSignal(null);
   }
 
   function skipTeachBack() {
+    setTeachBackText('');
+    setTeachBackResult(null);
+    setPendingAnswer((previous) => (previous ? withPhase(previous, 'awaiting-confidence') : previous));
+    setLearningSignal(null);
+  }
+
+  function submitConfidence(nextConfidence: Confidence) {
+    if (!currentQuestion || awaitingTeachBack) return;
+    recordPracticeAnswer(nextConfidence);
+  }
+
+  function skipConfidence() {
+    if (!currentQuestion || awaitingTeachBack) return;
+    setLearningSignal(null);
     recordPracticeAnswer();
   }
 
   function handleNext() {
+    // An answer that was submitted but never confirmed is recorded here, so
+    // advancing or finishing can never lose it.
+    flushPendingAnswer();
     if (isExamMode) {
       if (currentIndex < questions.length - 1) {
         setCurrentIndex((value) => value + 1);
@@ -562,6 +664,10 @@ export default function HomePage() {
           setSelectedAnswer([]);
           setSubmitted(false);
           setFeedbackOpen(false);
+          setPendingAnswer(null);
+          setLearningSignal(null);
+          setTeachBackText('');
+          setTeachBackResult(null);
           setAiResponse(null);
           setRatingDelta(null);
           return;
@@ -572,9 +678,14 @@ export default function HomePage() {
     }
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((value) => value + 1);
-      setSelectedAnswer([]);
+      const nextQuestion = questions[currentIndex + 1];
+      setSelectedAnswer(examAnswers[nextQuestion.id] ?? []);
       setSubmitted(false);
       setFeedbackOpen(false);
+      setPendingAnswer(null);
+      setLearningSignal(null);
+      setTeachBackText('');
+      setTeachBackResult(null);
       setAiResponse(null);
       setRatingDelta(null);
       setSubtopicChange(null);
@@ -641,7 +752,11 @@ export default function HomePage() {
   }
 
   function exportProgress() {
-    const payload = JSON.stringify({ attempts, bookmarks }, null, 2);
+    const payload = serializeProgress({
+      attempts,
+      bookmarks,
+      pendingAnswer,
+    });
     const blob = new Blob([payload], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -673,11 +788,18 @@ export default function HomePage() {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      setImportError(null);
       const text = await file.text();
-      const parsed = JSON.parse(text);
+      // A file that cannot be read leaves the existing progress untouched.
+      const parsed = parseProgress(text);
+      if (!parsed) {
+        setImportError('That file could not be imported. Check that it is a valid AZ-900 progress export.');
+        return;
+      }
       useProgressStore.setState({
-        attempts: parsed.attempts ?? [],
-        bookmarks: parsed.bookmarks ?? {},
+        attempts: parsed.attempts,
+        bookmarks: parsed.bookmarks,
+        pendingAnswer: parsed.pendingAnswer,
       });
     };
     input.click();
@@ -686,7 +808,7 @@ export default function HomePage() {
   function resetData() {
     const confirmed = window.confirm('Reset local progress and bookmarks?');
     if (!confirmed) return;
-    useProgressStore.setState({ attempts: [], bookmarks: {}, sessions: {} });
+    useProgressStore.setState({ attempts: [], bookmarks: {}, pendingAnswer: null, sessions: {} });
   }
 
   return (
@@ -1011,7 +1133,7 @@ export default function HomePage() {
                       <button
                         key={option.id}
                         onClick={() => handleChoice(option.id)}
-                        disabled={submitted || awaitingTeachBack}
+                        disabled={!canChangeSelection({ submitted, pending: pendingAnswer })}
                         className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${
                           isCorrect
                             ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
@@ -1032,6 +1154,18 @@ export default function HomePage() {
                     );
                   })}
                 </div>
+
+                {awaitingConfidence && !isExamMode && (
+                  <section className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/30" aria-label="Rate your confidence">
+                    <h3 className="text-sm font-semibold">How confident are you in this answer?</h3>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">This is a learning signal, not a test of knowledge. It is recorded with your answer and never changes your rating or the questions you get.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button onClick={() => submitConfidence('confident')} className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white">Confident</button>
+                      <button onClick={() => submitConfidence('unsure')} className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white">Unsure</button>
+                      <button onClick={skipConfidence} className="rounded-full border px-4 py-2 text-sm dark:border-slate-600">Skip</button>
+                    </div>
+                  </section>
+                )}
 
                 {awaitingTeachBack && (
                   <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/30">
@@ -1066,7 +1200,7 @@ export default function HomePage() {
                 )}
 
                 <div className="flex flex-wrap gap-3 pt-2">
-                  <button onClick={handleSubmit} className="rounded-full bg-sky-600 px-4 py-2 text-white" disabled={submitted}>
+                  <button onClick={handleSubmit} className="rounded-full bg-sky-600 px-4 py-2 text-white" disabled={submitted || awaitingTeachBack || awaitingConfidence}>
                     {submitted ? 'Answered' : 'Submit'}
                   </button>
                   <button onClick={handleNext} disabled={awaitingTeachBack} className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50">
@@ -1165,6 +1299,11 @@ export default function HomePage() {
               <button onClick={resetDemoData} className="rounded-full border border-violet-300 px-3 py-2 text-sm text-violet-800 dark:border-violet-800 dark:text-violet-200">Reset demo</button>
               <button onClick={resetData} className="rounded-full border border-red-300 px-3 py-2 text-sm text-red-600">Reset data</button>
             </div>
+            {importError && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200" role="alert">
+                {importError}
+              </p>
+            )}
           </div>
         </section>
 
@@ -1196,14 +1335,24 @@ export default function HomePage() {
                   {ratingDelta ? (
                     <span>Rating {ratingDelta.before} → {ratingDelta.after} ({ratingDelta.delta >= 0 ? '+' : ''}{ratingDelta.delta.toFixed(0)})</span>
                   ) : <span>Answer recorded</span>}
-                  {subtopicChange && <span className="block">Subtopic mastery {subtopicChange.before}% → {subtopicChange.after}%</span>}
+                  {subtopicChange && <span className="block">Subtopic accuracy {subtopicChange.before}% → {subtopicChange.after}%</span>}
                 </motion.li>
                 <motion.li initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
                   <span className="block font-semibold">3 · Next up</span>
                   <span>{triggeredPair && currentQuestion.pairId === triggeredPair.id ? `Pair drill unlocked: ${triggeredPair.a.name} vs ${triggeredPair.b.name}` : adaptiveEnabled && !isExamMode ? 'Selecting a practice item near 70% predicted success' : 'Continue with your selected question set'}</span>
                 </motion.li>
-              </ol>
-              {ratingDelta && (
+</ol>
+                {learningSignal && learningSignal !== 'unknown' && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30" aria-label="Learning signal">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{signalLabel(learningSignal)}</span>
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-700 dark:bg-violet-950 dark:text-violet-200">Learning signal</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{signalGuidance(learningSignal)}</p>
+                    <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Confidence is a signal about this one answer, not a measure of mastery.</p>
+                  </div>
+                )}
+                {ratingDelta && (
                 <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   {ratingDelta.reason}{' '}
                   <button onClick={() => setShowRatingMath((visible) => !visible)} aria-expanded={showRatingMath} className="font-medium underline">Show the math</button>
