@@ -6,7 +6,7 @@ import confetti from 'canvas-confetti';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bar, BarChart, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { questionBank } from '@/data/index';
-import { buildExamSet, buildPracticeSet, buildRemediationSet, shuffleOptions } from '@/lib/selection';
+import { buildExamSet, buildPracticeSet, buildRemediationSet, shuffleOptions, selectNextSessionQuestion } from '@/lib/selection';
 import { calculateAccuracy, calculateStreak, countAnsweredQuestions, getAccuracyTrend, getDomainBreakdown, getExamResults, getWeakSubtopics } from '@/lib/scoring';
 import { addAttempt, isValidPracticeSession, setPendingAnswer, toggleBookmark, useProgressStore } from '@/lib/store';
 import { Domain, Confidence, ExplainResponse, LearningSignal, PairDrillResult, PracticeSessionState, Question, TeachBackResult } from '@/lib/types';
@@ -217,6 +217,8 @@ export default function HomePage() {
       setExamStartedAt(activeExam.startedAt ?? Date.now());
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsExamMode(true);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSessionTarget(activeExam.questions.length);
     } else if (!new URLSearchParams(window.location.search).has('drill')) {
       const activePractice = savedExam?.practice;
       if (!isValidPracticeSession(activePractice)) return;
@@ -776,8 +778,7 @@ export default function HomePage() {
     }
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((value) => value + 1);
-      const nextQuestion = questions[currentIndex + 1];
-      setSelectedAnswer(examAnswers[nextQuestion.id] ?? []);
+      setSelectedAnswer([]);
       setSubmitted(false);
       setFeedbackOpen(false);
       setPendingAnswer(null);
@@ -833,6 +834,30 @@ export default function HomePage() {
       });
       setPairDrillResult(result);
       setPairDrillStartedAt(null);
+    }
+    if (!activePairId && questions.length < sessionTarget) {
+      const nextQuestion = selectNextSessionQuestion(
+        adaptiveEnabled,
+        adaptivePool,
+        useProgressStore.getState().attempts,
+        questions.map((question) => question.id),
+        Math.random,
+      );
+      if (nextQuestion) {
+        setQuestions((current) => [...current, nextQuestion]);
+        setCurrentIndex((index) => index + 1);
+        setSelectedAnswer([]);
+        setSubmitted(false);
+        setFeedbackOpen(false);
+        setPendingAnswer(null);
+        setLearningSignal(null);
+        setTeachBackText('');
+        setTeachBackResult(null);
+        setAiResponse(null);
+        setRatingDelta(null);
+        setSubtopicChange(null);
+        return;
+      }
     }
     clearStoredSession('practice');
     setCurrentIndex(0);
@@ -1329,7 +1354,11 @@ export default function HomePage() {
                     {submitted ? 'Answered' : 'Submit'}
                   </button>
                   <button onClick={handleNext} disabled={awaitingTeachBack} className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    {currentIndex === questions.length - 1 && (isExamMode || !adaptiveEnabled || questions.length >= sessionTarget) ? 'Finish' : 'Next'}
+                    {(isExamMode
+                      ? (currentIndex < questions.length - 1 || (adaptiveEnabled && questions.length < sessionTarget))
+                      : (currentIndex < questions.length - 1 || (!activePairId && sessionTarget > 0 && questions.length < sessionTarget)))
+                      ? 'Next'
+                      : 'Finish'}
                   </button>
                   <button onClick={handleExplain} className="rounded-full border px-4 py-2">
                     Explain
