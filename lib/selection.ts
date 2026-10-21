@@ -1,4 +1,5 @@
 import { Attempt, Domain, Question } from '@/lib/types';
+import { selectAdaptiveQuestion, latestDomainRating, latestRating } from '@/lib/adaptive';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -188,6 +189,34 @@ export function buildExamSet(questions: Question[], seed: number, count = 40): Q
   });
 
   return shuffleSeeded(pool, seed).slice(0, count);
+}
+
+export function selectNextSessionQuestion(
+  adaptiveEnabled: boolean,
+  adaptivePool: Question[],
+  attempts: Attempt[],
+  servedQuestionIds: string[],
+  random: () => number = Math.random,
+  ratingForQuestion?: (question: Question) => number,
+): Question | null {
+  if (adaptiveEnabled) {
+    const rating = latestRating(attempts);
+    return selectAdaptiveQuestion(
+      adaptivePool,
+      rating,
+      attempts,
+      servedQuestionIds,
+      random,
+      ratingForQuestion ?? ((question: Question) => latestDomainRating(attempts, question.domain, adaptivePool)),
+    );
+  }
+
+  for (const question of adaptivePool) {
+    if (!servedQuestionIds.includes(question.id)) {
+      return question;
+    }
+  }
+  return null;
 }
 
 const DOMAINS: Domain[] = ['cloud-concepts', 'architecture-services', 'management-governance'];
