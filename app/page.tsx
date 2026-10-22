@@ -55,7 +55,8 @@ export default function LandingPage() {
             <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Unofficial AZ-900 Practice Tool</p>
             <h2 className="mt-2 text-xl font-semibold">Build the habit of understanding why the answer is right.</h2>
           </div>
-          </div>
+        </header>
+      </div>
     </main>
   );
 }
