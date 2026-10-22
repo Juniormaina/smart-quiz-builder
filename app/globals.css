@@ -6,6 +6,11 @@
   --background: #f8fafc;
   --foreground: #0f172a;
   --brand: #0ea5e9;
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
+  --border: #e2e8f0;
+  --card: #ffffff;
+  --muted-foreground: #64748b;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -16,6 +21,11 @@
   --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
 }
 
 html {
@@ -25,6 +35,11 @@ html {
 
 html.dark {
   color-scheme: dark;
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --border: #1e293b;
+  --card: #0f172a;
+  --muted-foreground: #94a3b8;
 }
 
 body {
