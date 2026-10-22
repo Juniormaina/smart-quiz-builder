@@ -1,57 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import confetti from "canvas-confetti";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  Bar,
-  BarChart,
-  Line,
-  LineChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { questionBank } from "@/data/index";
-import {
-  buildExamSet,
-  buildPracticeSet,
-  buildRemediationSet,
-  shuffleOptions,
-} from "@/lib/selection";
-import {
-  calculateAccuracy,
-  calculateStreak,
-  countAnsweredQuestions,
-  getAccuracyTrend,
-  getDomainBreakdown,
-  getExamResults,
-  getWeakSubtopics,
-} from "@/lib/scoring";
-import {
-  addAttempt,
-  isValidPracticeSession,
-  setPendingAnswer,
-  toggleBookmark,
-  useProgressStore,
-} from "@/lib/store";
-import {
-  Domain,
-  Confidence,
-  ExplainResponse,
-  LearningSignal,
-  PairDrillResult,
-  PracticeSessionState,
-  Question,
-  TeachBackResult,
-} from "@/lib/types";
 import {
   formatRating,
   getDomainRatingHistory,
@@ -64,39 +14,11 @@ import {
 } from "@/lib/adaptive";
 import { confusionPairs } from "@/data/confusionPairs";
 import {
-  findTriggeredPair,
-  getPairStatus,
-  pairTriggerCount,
-} from "@/lib/pairs";
-import { gradeExplanationFallback, parseGradeResponse } from "@/lib/teachback";
-import {
-  classifyLearningSignal,
-  signalGuidance,
-  signalLabel,
-} from "@/lib/confidence";
-import {
-  captureSubmittedAnswer,
-  canChangeSelection,
-  getCorrectAnswerDisplay,
-  isSelectionCorrect,
-  resolvePendingAnswer,
-  shouldRecordBeforeAdvance,
-  withPhase,
-  withTeachBack,
-} from "@/lib/practice-flow";
-import { parseProgress, serializeProgress } from "@/lib/progress-io";
-import { createDemoProgress } from "@/lib/demo";
-
-import {
   LENS_OPTIONS,
   AfricanContextLens,
   applyAfricanContextPrompt,
 } from "@/lib/africanPrompts";
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import confetti from 'canvas-confetti';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bar, BarChart, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { questionBank } from '@/data/index';
@@ -104,8 +26,6 @@ import { buildExamSet, buildPracticeSet, buildRemediationSet, shuffleOptions, se
 import { calculateAccuracy, calculateStreak, countAnsweredQuestions, getAccuracyTrend, getDomainBreakdown, getExamResults, getWeakSubtopics } from '@/lib/scoring';
 import { addAttempt, isValidPracticeSession, setPendingAnswer, toggleBookmark, useProgressStore } from '@/lib/store';
 import { Domain, Confidence, ExplainResponse, LearningSignal, PairDrillResult, PracticeSessionState, Question, TeachBackResult } from '@/lib/types';
-import { formatRating, getDomainRatingHistory, latestDomainRating, latestRating, ratingLevel, scoreResponse, selectAdaptiveQuestion, updateRating } from '@/lib/adaptive';
-import { confusionPairs } from '@/data/confusionPairs';
 import { findTriggeredPair, getPairStatus, pairTriggerCount } from '@/lib/pairs';
 import { gradeExplanationFallback, parseGradeResponse } from '@/lib/teachback';
 import { classifyLearningSignal, signalGuidance, signalLabel } from '@/lib/confidence';
@@ -223,8 +143,8 @@ export default function HomePage() {
     const savedTheme = window.localStorage.getItem("az900-theme");
     const nextTheme =
       savedTheme === "dark" ||
-      (savedTheme === null &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches)
+        (savedTheme === null &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
         ? "dark"
         : "light";
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -258,10 +178,10 @@ export default function HomePage() {
       .attempts.filter((attempt) => attempt.pairId === pair.id);
     const priorAccuracy = existingPairAttempts.length
       ? Math.round(
-          (existingPairAttempts.filter((attempt) => attempt.correct).length /
-            existingPairAttempts.length) *
-            100,
-        )
+        (existingPairAttempts.filter((attempt) => attempt.correct).length /
+          existingPairAttempts.length) *
+        100,
+      )
       : 0;
     const sessions = useProgressStore.getState().sessions;
     useProgressStore.setState({
@@ -354,11 +274,13 @@ export default function HomePage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuestions(activeExam.questions);
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSessionTarget(activeExam.questions.length);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentIndex(activeExam.currentIndex ?? 0);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedAnswer(
         activeExam.answers?.[
-          activeExam.questions[activeExam.currentIndex ?? 0]?.id
+        activeExam.questions[activeExam.currentIndex ?? 0]?.id
         ] ?? [],
       );
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -371,9 +293,6 @@ export default function HomePage() {
       setExamStartedAt(activeExam.startedAt ?? Date.now());
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsExamMode(true);
-    } else if (!new URLSearchParams(window.location.search).has("drill")) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSessionTarget(activeExam.questions.length);
     } else if (!new URLSearchParams(window.location.search).has('drill')) {
       const activePractice = savedExam?.practice;
       if (!isValidPracticeSession(activePractice)) return;
@@ -604,10 +523,10 @@ export default function HomePage() {
     setPairBaselineAccuracy(
       previous.length
         ? Math.round(
-            (previous.filter((attempt) => attempt.correct).length /
-              previous.length) *
-              100,
-          )
+          (previous.filter((attempt) => attempt.correct).length /
+            previous.length) *
+          100,
+        )
         : 0,
     );
     flushPendingAnswer();
@@ -652,14 +571,14 @@ export default function HomePage() {
     );
     const firstQuestion = adaptiveEnabled
       ? selectAdaptiveQuestion(
-          next,
-          currentRating,
-          attempts,
-          [],
-          Math.random,
-          (question) =>
-            latestDomainRating(attempts, question.domain, questionBank),
-        )
+        next,
+        currentRating,
+        attempts,
+        [],
+        Math.random,
+        (question) =>
+          latestDomainRating(attempts, question.domain, questionBank),
+      )
       : next[0];
     const target = Math.min(count, next.length);
     setAdaptivePool(next);
@@ -729,14 +648,14 @@ export default function HomePage() {
     );
     const firstQuestion = adaptiveEnabled
       ? selectAdaptiveQuestion(
-          next,
-          currentRating,
-          attempts,
-          [],
-          Math.random,
-          (question) =>
-            latestDomainRating(attempts, question.domain, questionBank),
-        )
+        next,
+        currentRating,
+        attempts,
+        [],
+        Math.random,
+        (question) =>
+          latestDomainRating(attempts, question.domain, questionBank),
+      )
       : next[0];
     setAdaptivePool(next);
     setSessionTarget(next.length);
@@ -885,7 +804,7 @@ export default function HomePage() {
       .attempts.filter((attempt) => subtopicQuestionIds.has(attempt.qid));
     const priorSubtopicAccuracy = priorSubtopicAttempts.length
       ? priorSubtopicAttempts.filter((attempt) => attempt.correct).length /
-        priorSubtopicAttempts.length
+      priorSubtopicAttempts.length
       : 0;
     const nextSubtopicAccuracy =
       (priorSubtopicAttempts.filter((attempt) => attempt.correct).length +
@@ -1016,9 +935,9 @@ export default function HomePage() {
     setPendingAnswer((previous) =>
       previous
         ? withTeachBack(withPhase(previous, "awaiting-confidence"), {
-            ...graded,
-            text,
-          })
+          ...graded,
+          text,
+        })
         : previous,
     );
     setLearningSignal(null);
@@ -1685,8 +1604,8 @@ export default function HomePage() {
                           setFlagged((current) =>
                             current.includes(currentQuestion.id)
                               ? current.filter(
-                                  (value) => value !== currentQuestion.id,
-                                )
+                                (value) => value !== currentQuestion.id,
+                              )
                               : [...current, currentQuestion.id],
                           )
                         }
@@ -1765,7 +1684,7 @@ export default function HomePage() {
                       <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-800 dark:bg-sky-950 dark:text-sky-200">
                         {
                           ["Easy", "Medium", "Hard"][
-                            currentQuestion.difficulty - 1
+                          currentQuestion.difficulty - 1
                           ]
                         }{" "}
                         question
@@ -1831,17 +1750,16 @@ export default function HomePage() {
                             pending: pendingAnswer,
                           })
                         }
-                        className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${
-                          isCorrect
-                            ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
-                            : isWrong
-                              ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-                              : isMissedCorrect
-                                ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
-                                : isSelected
-                                  ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30"
-                                  : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
-                        }`}
+                        className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${isCorrect
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
+                          : isWrong
+                            ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+                            : isMissedCorrect
+                              ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                              : isSelected
+                                ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30"
+                                : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
+                          }`}
                       >
                         <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold">
                           {index + 1}
@@ -1960,11 +1878,12 @@ export default function HomePage() {
                     className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {currentIndex === questions.length - 1 &&
-                    (isExamMode ||
-                      !adaptiveEnabled ||
-                      questions.length >= sessionTarget)
+                      (isExamMode ||
+                        !adaptiveEnabled ||
+                        questions.length >= sessionTarget)
                       ? "Finish"
                       : "Next"}
+                  </button>
                   <button onClick={handleNext} disabled={awaitingTeachBack} className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50">
                     {(isExamMode
                       ? (currentIndex < questions.length - 1 || (adaptiveEnabled && questions.length < sessionTarget))
@@ -2203,7 +2122,7 @@ export default function HomePage() {
                       <span className="block">
                         Teach-back: {teachBackResult.score}/2
                         {isSelectionCorrect(currentQuestion, selectedAnswer) &&
-                        teachBackResult.score === 0
+                          teachBackResult.score === 0
                           ? " · Fragile understanding"
                           : ""}
                       </span>
@@ -2242,7 +2161,7 @@ export default function HomePage() {
                     <span className="block font-semibold">3 · Next up</span>
                     <span>
                       {triggeredPair &&
-                      currentQuestion.pairId === triggeredPair.id
+                        currentQuestion.pairId === triggeredPair.id
                         ? `Pair drill unlocked: ${triggeredPair.a.name} vs ${triggeredPair.b.name}`
                         : adaptiveEnabled && !isExamMode
                           ? "Selecting a practice item near 70% predicted success"
@@ -2447,11 +2366,10 @@ export default function HomePage() {
                         key={lens.id}
                         type="button"
                         onClick={() => setActiveLens(lens.id)}
-                        className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all text-center ${
-                          activeLens === lens.id
-                            ? "bg-blue-600 text-white font-semibold shadow-md ring-1 ring-blue-400"
-                            : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                        }`}
+                        className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all text-center ${activeLens === lens.id
+                          ? "bg-blue-600 text-white font-semibold shadow-md ring-1 ring-blue-400"
+                          : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                          }`}
                       >
                         <span>
                           {lens.icon} {lens.label}
