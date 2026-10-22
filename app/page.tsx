@@ -11,8 +11,8 @@ export default function LandingPage() {
     const savedTheme = window.localStorage.getItem("az900-theme");
     const nextTheme =
       savedTheme === "dark" ||
-      (savedTheme === null &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches)
+        (savedTheme === null &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
         ? "dark"
         : "light";
     setTheme(nextTheme);
@@ -39,7 +39,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/50 to-background/90 z-0 pointer-events-none" />
         <div className="relative z-10 flex h-full flex-col items-center justify-center text-center px-6">
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">Build the habit of understanding why.</h1>
-          <p className="mt-4 text-slate-500 dark:text-slate-400 max-w-2xl">Master Microsoft Azure fundamentals with adaptive spaced repetition.</p>
+          <p className="mt-4 text-white ">Master Microsoft Azure fundamentals with adaptive spaced repetition.</p>
           <Link
             href="/practice"
             className="mt-8 rounded-full bg-amber-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"

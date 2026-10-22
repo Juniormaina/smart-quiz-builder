@@ -1082,6 +1082,35 @@ export default function HomePage() {
     setAiResponse(null);
   }
 
+  function handlePrevious() {
+    if (currentIndex <= 0 || awaitingTeachBack) return;
+    flushPendingAnswer();
+
+    const previousIndex = currentIndex - 1;
+    const previousQuestion = questions[previousIndex];
+    setCurrentIndex(previousIndex);
+    setSubmitted(false);
+    setFeedbackOpen(false);
+    setPendingAnswer(null);
+    setLearningSignal(null);
+    setTeachBackText("");
+    setTeachBackResult(null);
+    setAiResponse(null);
+    setRatingDelta(null);
+    setSubtopicChange(null);
+
+    if (isExamMode) {
+      setSelectedAnswer(examAnswers[previousQuestion.id] ?? []);
+      return;
+    }
+
+    const previousAttempt = [...useProgressStore.getState().attempts]
+      .reverse()
+      .find((attempt) => attempt.qid === previousQuestion.id);
+    setSelectedAnswer(previousAttempt?.chosen ?? []);
+    setSubmitted(Boolean(previousAttempt));
+  }
+
   async function handleExplain() {
     if (!currentQuestion) return;
     setAiLoading(true);
@@ -1880,18 +1909,17 @@ export default function HomePage() {
                     {submitted ? "Answered" : "Submit"}
                   </button>
                   <button
+                    onClick={handlePrevious}
+                    disabled={currentIndex === 0 || awaitingTeachBack}
+                    className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
                     onClick={handleNext}
                     disabled={awaitingTeachBack}
                     className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {currentIndex === questions.length - 1 &&
-                      (isExamMode ||
-                        !adaptiveEnabled ||
-                        questions.length >= sessionTarget)
-                      ? "Finish"
-                      : "Next"}
-                  </button>
-                  <button onClick={handleNext} disabled={awaitingTeachBack} className="rounded-full border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50">
                     {(isExamMode
                       ? (currentIndex < questions.length - 1 || (adaptiveEnabled && questions.length < sessionTarget))
                       : (currentIndex < questions.length - 1 || (!activePairId && sessionTarget > 0 && questions.length < sessionTarget)))
