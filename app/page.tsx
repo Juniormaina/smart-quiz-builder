@@ -1,4 +1,5 @@
 "use client";
+import { ImageStreamHero } from "@/components/ui/image-stream-hero";
 
 import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
@@ -1187,6 +1188,20 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <ImageStreamHero
+        images={[
+          { src: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80", alt: "Cloud" },
+          { src: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80", alt: "Servers" },
+          { src: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80", alt: "Security" },
+        ]}
+        className="h-[420px] w-full"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/50 to-background/90 z-0 pointer-events-none" />
+        <div className="relative z-10 flex h-full flex-col items-center justify-center text-center px-6">
+          <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">Build the habit of understanding why.</h1>
+          <p className="mt-4 text-muted-foreground max-w-2xl">Master Microsoft Azure fundamentals with adaptive spaced repetition.</p>
+        </div>
+      </ImageStreamHero>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
