@@ -1214,14 +1214,6 @@ export default function HomePage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() =>
-                  setTheme((current) => (current === "dark" ? "light" : "dark"))
-                }
-                className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium dark:border-slate-700"
-              >
-                {theme === "dark" ? "Light mode" : "Dark mode"}
-              </button>
               <div className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:border-amber-600 dark:bg-amber-950/30 dark:text-amber-200">
                 Not affiliated with or endorsed by Microsoft.
               </div>
