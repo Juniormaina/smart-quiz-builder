@@ -3,15 +3,15 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #020617;
-  --foreground: #f1f5f9;
-  --brand: #0ea5e9;
-  --primary: #0ea5e9;
-  --primary-foreground: #ffffff;
-  --border: #1e293b;
-  --card: #0f172a;
-  --muted-foreground: #94a3b8;
-  --success: #10b981;
+  --background: #181412;
+  --foreground: #fef3c7;
+  --brand: #f59e0b;
+  --primary: #f59e0b;
+  --primary-foreground: #181412;
+  --border: #3A302B;
+  --card: #221C1A;
+  --muted-foreground: #a89f9a;
+  --success: #f59e0b;
   --warning: #f59e0b;
   --danger: #ef4444;
 }
@@ -35,11 +35,11 @@ html {
 
 html.dark {
   color-scheme: dark;
-  --background: #020617;
-  --foreground: #f1f5f9;
-  --border: #1e293b;
-  --card: #0f172a;
-  --muted-foreground: #94a3b8;
+  --background: #181412;
+  --foreground: #fef3c7;
+  --border: #3A302B;
+  --card: #221C1A;
+  --muted-foreground: #a89f9a;
 }
 
 body {

@@ -1187,7 +1187,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <main className="min-h-screen bg-background text-foreground bg-gradient-to-br from-amber-950/20 via-background to-background">
       <ImageStreamHero
         images={[
           { src: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80", alt: "Cloud" },
