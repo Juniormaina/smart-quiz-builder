@@ -42,7 +42,7 @@ export default function LandingPage() {
           <p className="mt-4 text-slate-500 dark:text-slate-400 max-w-2xl">Master Microsoft Azure fundamentals with adaptive spaced repetition.</p>
           <Link
             href="/practice"
-            className="mt-8 rounded-full bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            className="mt-8 rounded-full bg-amber-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
           >
             Launch Practice Dashboard
           </Link>
@@ -55,12 +55,6 @@ export default function LandingPage() {
             <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Unofficial AZ-900 Practice Tool</p>
             <h2 className="mt-2 text-xl font-semibold">Build the habit of understanding why the answer is right.</h2>
           </div>
-          <button
-            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
-            className="rounded-full border border-border px-3 py-1.5 text-xs font-medium"
-          >
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
         </header>
       </div>
     </main>

@@ -1187,7 +1187,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <main className="min-h-screen bg-background text-foreground bg-gradient-to-br from-amber-950/20 via-background to-background">
       <ImageStreamHero
         images={[
           { src: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80", alt: "Cloud" },
@@ -1214,14 +1214,6 @@ export default function HomePage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() =>
-                  setTheme((current) => (current === "dark" ? "light" : "dark"))
-                }
-                className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium dark:border-slate-700"
-              >
-                {theme === "dark" ? "Light mode" : "Dark mode"}
-              </button>
               <div className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:border-amber-600 dark:bg-amber-950/30 dark:text-amber-200">
                 Not affiliated with or endorsed by Microsoft.
               </div>
