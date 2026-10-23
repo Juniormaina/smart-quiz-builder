@@ -317,8 +317,8 @@ flowchart TD
   Feedback --> Store[Zustand store<br/>localStorage]
   Store --> Dashboard[Progress dashboard]
   Dashboard --> Remediation[Weak-spot remediation]
-  Feedback --> API[/api/explain]
-  Feedback --> API2[/api/grade-explanation]
+  Feedback --> API["/api/explain"]
+  Feedback --> API2["/api/grade-explanation"]
   API --> Anthropic[Anthropic API]
   API2 --> Anthropic
 ```
